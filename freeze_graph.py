@@ -140,19 +140,17 @@ def freeze_graph_with_def_protos(input_graph_def,
         if variable_names_blacklist else None)
 
     if input_meta_graph_def:
-      output_graph_def = graph_util.convert_variables_to_constants(
-          sess,
-          input_meta_graph_def.graph_def,
-          output_node_names.replace(' ', '').split(","),
-          variable_names_whitelist=variable_names_whitelist,
-          variable_names_blacklist=variable_names_blacklist)
+      output_graph_def = input_meta_graph_def.graph_def
     else:
-      output_graph_def = graph_util.convert_variables_to_constants(
-          sess,
-          input_graph_def,
-          output_node_names.replace(' ', '').split(","),
-          variable_names_whitelist=variable_names_whitelist,
-          variable_names_blacklist=variable_names_blacklist)
+      output_graph_def = input_graph_def
+
+    output_graph_def = _freeze_batch_norm_ops(output_graph_def)
+    output_graph_def = graph_util.convert_variables_to_constants(
+        sess,
+        output_graph_def,
+        output_node_names.replace(' ', '').split(","),
+        variable_names_whitelist=variable_names_whitelist,
+        variable_names_blacklist=variable_names_blacklist)
 
   # Write GraphDef to file if output path has been given.
   if output_graph:
@@ -206,6 +204,24 @@ def _parse_input_saver_proto(input_saver, input_binary):
     else:
       text_format.Merge(f.read(), saver_def)
   return saver_def
+
+
+def _freeze_batch_norm_ops(graph_def):
+  # Handle batch norm nodes
+  for node in graph_def.node:
+    if node.op == 'RefSwitch':
+      node.op = 'Switch'
+      for index in xrange(len(node.input)):
+        if 'moving_' in node.input[index]:
+          node.input[index] = node.input[index] + '/read'
+    elif node.op == 'AssignSub':
+      node.op = 'Sub'
+      if 'use_locking' in node.attr: del node.attr['use_locking']
+    elif node.op == 'AssignAdd':
+      node.op = 'Add'
+      if 'use_locking' in node.attr: del node.attr['use_locking']
+  return graph_def
+
 
 
 def freeze_graph(input_graph,
