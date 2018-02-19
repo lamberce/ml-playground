@@ -43,8 +43,7 @@ class TensorflowModelEvaluator:
       input: numpy array that we are going to perform inference on.
 
     Returns:
-      Future with callback attached that converts result to numpy array once
-      response is recieved.
+      Future of type predict_pb2.PredictResponse.
     """
     prediction_request = self._build_prediction_request(inputs)
     # TODO(lamberce): figure out how to add callback that transforms to numpy
